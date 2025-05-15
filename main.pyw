@@ -1,73 +1,48 @@
 #!/usr/bin/env python3
 from tkinter import *
 from tkinter.scrolledtext import ScrolledText
-from tkinter.font import *
+from tkinter.font import Font
 from tkinter.ttk import *
-from typing import Callable, Optional
+from typing import Callable
 from difflib import SequenceMatcher
 
-DEFAULT_TEXTAREA_WIDTH, DEFAULT_TEXTAREA_HEIGHT = 30, 15
-HIGHLIGHT_ADDITION = "#79FF79"
-HIGHLIGHT_DELETION = "#FF7575"
-HIGHLIGHT_MODIFIED = "#FFE153"
+""" CUSTOMIZABLE TEXTAREA """
 
-type RowCol = tuple[int, int]
+DEFAULT_W, DEFAULT_H = 30, 15
+FONTFAMILY = "Consolas"
+BG_ADDITION = "#79FF79"
+BG_DELETION = "#FF7575"
+BG_MODIFIED = "#FFE153"
+
+""" CUSTOMIZABLE TEXTAREA"""
 
 
 class TextArea(ScrolledText):
     def __init__(self, master: Misc):
-        font = Font(master, family="Consolas")
-        super().__init__(master, width=DEFAULT_TEXTAREA_WIDTH, height=DEFAULT_TEXTAREA_HEIGHT, font=font)
-        self._on_modify = None
+        font = Font(master, family=FONTFAMILY)
+        super().__init__(master, width=DEFAULT_W, height=DEFAULT_H, font=font)
 
     @property
-    def text(self) -> str:
-        return self.get("1.0", "end-1c")
-
-    @text.setter
-    def text(self, new_text: str) -> None:
-        self.clear_text()
-        self.insert(INSERT, new_text)
+    def lines(self) -> list[str]:
+        return self.get("1.0", "end-1c").splitlines()
 
     def clear_text(self) -> None:
-        self.delete("1.0", END)
+        self.delete("1.0", "end")
 
-    @property
-    def on_modify(self) -> Optional[Callable]:
-        return self._on_modify
+    def on_modify(self, callback: Callable) -> None:
+        def func(_) -> None:
+            if self.edit_modified():
+                callback()
+                self.edit_modified(False)
+        self.bind("<<Modified>>", func)
 
-    @on_modify.setter
-    def on_modify(self, callback: Optional[Callable]) -> None:
-        self._on_modify = callback
+    def highlight(self, bgcolor: str, row: int, start: int, end: int) -> None:
+        start = f"{row}.{start}"
+        end = f"{row}.{end}"
 
-        if callback is None:
-            self.unbind("<<Modified>>")
-        else:
-            def func(event) -> None:
-                if self.edit_modified():
-                    callback()
-                    self.edit_modified(False)
-
-            self.bind("<<Modified>>", func)
-
-    def highlight(self, bgcolor: str, start_rc: RowCol, end_rc: Optional[RowCol] = None) -> None:
-        lines = self.text.splitlines()
-
-        if end_rc is None:
-            end_rc = (len(lines), len(lines[-1]))
-
-        for row in range(start_rc[0], end_rc[0] + 1):
-            l = f"{row}.0"
-            r = f"{row}.{len(lines[row - 1])}"
-
-            if row == start_rc[0]:
-                l = f"{row}.{start_rc[1]}"
-            if row == end_rc[0]:
-                r = f"{row}.{end_rc[1]}"
-
-            tag = f"highlight_{l}_{r}"
-            self.tag_add(tag, l, r)
-            self.tag_config(tag, background=bgcolor)
+        tag = f"highlight_{start}_{end}"
+        self.tag_add(tag, start, end)
+        self.tag_config(tag, background=bgcolor)
 
     def clear_highlights(self) -> None:
         for tag in self.tag_names():
@@ -78,7 +53,7 @@ class TextArea(ScrolledText):
 class App(Tk):
     def __init__(self):
         super().__init__()
-        self.title("差異比較器")
+        self.title("差異比較")
         self.setup_ui()
 
         self.update_idletasks()
@@ -92,7 +67,7 @@ class App(Tk):
         label1.pack(anchor="w", pady=(0, 10))
 
         self.textarea1 = TextArea(lframe)
-        self.textarea1.on_modify = self.compare
+        self.textarea1.on_modify(self.compare)
         self.textarea1.pack(fill="both", expand=True, pady=(0, 10))
 
         btn1 = Button(lframe, text="清除", command=self.textarea1.clear_text)
@@ -107,7 +82,7 @@ class App(Tk):
         label2.pack(anchor="w", pady=(0, 10))
 
         self.textarea2 = TextArea(rframe)
-        self.textarea2.on_modify = self.compare
+        self.textarea2.on_modify(self.compare)
         self.textarea2.pack(fill="both", expand=True, pady=(0, 10))
 
         btn2 = Button(rframe, text="清除", command=self.textarea2.clear_text)
@@ -117,32 +92,27 @@ class App(Tk):
         self.textarea1.clear_highlights()
         self.textarea2.clear_highlights()
 
-        lines1 = self.textarea1.text.splitlines()
-        lines2 = self.textarea2.text.splitlines()
+        lines1 = self.textarea1.lines
+        lines2 = self.textarea2.lines
 
         n1 = len(lines1)
         n2 = len(lines2)
 
-        for i, (ln1, ln2) in enumerate(zip(lines1, lines2)):
+        for i in range(max(n1, n2)):
             row = i + 1
-            matcher = SequenceMatcher(None, ln1, ln2)
+            matcher = SequenceMatcher(None, lines1[i] if i < n1 else "", lines2[i] if i < n2 else "")
 
             for tag, i1, i2, j1, j2 in matcher.get_opcodes():
                 match tag:
                     case "equal":
                         pass
                     case "insert":
-                        self.textarea2.highlight(HIGHLIGHT_ADDITION, (row, j1), (row, j2))
+                        self.textarea2.highlight(BG_ADDITION, row, j1, j2)
                     case "delete":
-                        self.textarea1.highlight(HIGHLIGHT_DELETION, (row, i1), (row, i2))
+                        self.textarea1.highlight(BG_DELETION, row, i1, i2)
                     case "replace":
-                        self.textarea1.highlight(HIGHLIGHT_MODIFIED, (row, i1), (row, i2))
-                        self.textarea2.highlight(HIGHLIGHT_MODIFIED, (row, j1), (row, j2))
-
-        if n1 < n2:  # insert
-            self.textarea2.highlight(HIGHLIGHT_ADDITION, (n1 + 1, 0))
-        elif n1 > n2:  # delete
-            self.textarea1.highlight(HIGHLIGHT_DELETION, (n2 + 1, 0))
+                        self.textarea1.highlight(BG_MODIFIED, row, i1, i2)
+                        self.textarea2.highlight(BG_MODIFIED, row, j1, j2)
 
 
 if __name__ == "__main__":
