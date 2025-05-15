@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 from tkinter import *
+from tkinter import messagebox
 from tkinter.scrolledtext import ScrolledText
 from tkinter.font import Font
+from tkinterdnd2 import DND_FILES, TkinterDnD
 from tkinter.ttk import *
+
 from typing import Callable
 from difflib import SequenceMatcher
+from collections import deque
 
 """ CUSTOMIZABLE TEXTAREA """
 
@@ -21,6 +25,35 @@ class TextArea(ScrolledText):
     def __init__(self, master: Misc):
         font = Font(master, family=FONTFAMILY)
         super().__init__(master, width=DEFAULT_W, height=DEFAULT_H, font=font)
+
+        self.drop_target_register(DND_FILES)
+        self.dnd_bind("<<Drop>>", self.drop)
+
+    def drop(self, event) -> None:
+        path: str = event.data
+        print("[]", path)
+
+        if " " in path:
+            stack = deque()
+            for c in path:
+                if c == "{":
+                    stack.append(1)
+                elif c == "}":
+                    stack.pop()
+                elif c == " " and not stack:
+                    messagebox.showerror("差異比較", "不支援拖放多個檔案")
+                    path = ""
+                    break
+
+        if path:
+            path = path.strip("{}")
+            try:
+                with open(path, encoding="utf-8") as f:
+                    content = f.read()
+                self.clear_text()
+                self.insert("1.0", content)
+            except UnicodeDecodeError:
+                messagebox.showerror("差異比較", "Unicode 解碼錯誤")
 
     @property
     def lines(self) -> list[str]:
@@ -50,7 +83,7 @@ class TextArea(ScrolledText):
                 self.tag_delete(tag)
 
 
-class App(Tk):
+class App(TkinterDnD.Tk):
     def __init__(self):
         super().__init__()
         self.title("差異比較")
@@ -70,8 +103,8 @@ class App(Tk):
         self.textarea1.on_modify(self.compare)
         self.textarea1.pack(fill="both", expand=True, pady=(0, 10))
 
-        btn1 = Button(lframe, text="清除", command=self.textarea1.clear_text)
-        btn1.pack(anchor="w")
+        clsbtn1 = Button(lframe, text="清除", command=self.textarea1.clear_text)
+        clsbtn1.pack(anchor="w")
 
         #
 
@@ -85,8 +118,8 @@ class App(Tk):
         self.textarea2.on_modify(self.compare)
         self.textarea2.pack(fill="both", expand=True, pady=(0, 10))
 
-        btn2 = Button(rframe, text="清除", command=self.textarea2.clear_text)
-        btn2.pack(anchor="w")
+        clsbtn2 = Button(rframe, text="清除", command=self.textarea2.clear_text)
+        clsbtn2.pack(anchor="w")
 
     def compare(self):
         self.textarea1.clear_highlights()
