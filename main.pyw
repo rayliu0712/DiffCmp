@@ -6,6 +6,7 @@ from tkinter.ttk import *
 from typing import Callable, Optional
 from difflib import SequenceMatcher
 
+DEFAULT_TEXTAREA_WIDTH, DEFAULT_TEXTAREA_HEIGHT = 30, 15
 HIGHLIGHT_ADDITION = "#79FF79"
 HIGHLIGHT_DELETION = "#FF7575"
 HIGHLIGHT_MODIFIED = "#FFE153"
@@ -13,14 +14,15 @@ HIGHLIGHT_MODIFIED = "#FFE153"
 type RowCol = tuple[int, int]
 
 
-class MultilineText(ScrolledText):
-    def __init__(self, master: Misc, **kwargs):
-        super().__init__(master, **kwargs)
+class TextArea(ScrolledText):
+    def __init__(self, master: Misc):
+        font = Font(master, family="Consolas")
+        super().__init__(master, width=DEFAULT_TEXTAREA_WIDTH, height=DEFAULT_TEXTAREA_HEIGHT, font=font)
         self._on_modify = None
 
     @property
     def text(self) -> str:
-        return self.get("1.0", "end - 1c")
+        return self.get("1.0", "end-1c")
 
     @text.setter
     def text(self, new_text: str) -> None:
@@ -83,19 +85,17 @@ class App(Tk):
         self.minsize(self.winfo_width(), self.winfo_height())
 
     def setup_ui(self):
-        font = Font(self, family="Consolas")
-
         lframe = Frame(self, padding=10)
         lframe.pack(fill="both", expand=True, side="left")
 
         label1 = Label(lframe, text="原始文字")
         label1.pack(anchor="w", pady=(0, 10))
 
-        self.multext1 = MultilineText(lframe, width=30, height=15, font=font)
-        self.multext1.on_modify = self.compare
-        self.multext1.pack(pady=(0, 10))
+        self.textarea1 = TextArea(lframe)
+        self.textarea1.on_modify = self.compare
+        self.textarea1.pack(fill="both", expand=True, pady=(0, 10))
 
-        btn1 = Button(lframe, text="清除", command=self.multext1.clear_text)
+        btn1 = Button(lframe, text="清除", command=self.textarea1.clear_text)
         btn1.pack(anchor="w")
 
         #
@@ -106,19 +106,19 @@ class App(Tk):
         label2 = Label(rframe, text="比較文字")
         label2.pack(anchor="w", pady=(0, 10))
 
-        self.multext2 = MultilineText(rframe, width=30, height=15, font=font)
-        self.multext2.on_modify = self.compare
-        self.multext2.pack(pady=(0, 10))
+        self.textarea2 = TextArea(rframe)
+        self.textarea2.on_modify = self.compare
+        self.textarea2.pack(fill="both", expand=True, pady=(0, 10))
 
-        btn2 = Button(rframe, text="清除", command=self.multext2.clear_text)
+        btn2 = Button(rframe, text="清除", command=self.textarea2.clear_text)
         btn2.pack(anchor="w")
 
     def compare(self):
-        self.multext1.clear_highlights()
-        self.multext2.clear_highlights()
+        self.textarea1.clear_highlights()
+        self.textarea2.clear_highlights()
 
-        lines1 = self.multext1.text.splitlines()
-        lines2 = self.multext2.text.splitlines()
+        lines1 = self.textarea1.text.splitlines()
+        lines2 = self.textarea2.text.splitlines()
 
         n1 = len(lines1)
         n2 = len(lines2)
@@ -132,17 +132,17 @@ class App(Tk):
                     case "equal":
                         pass
                     case "insert":
-                        self.multext2.highlight(HIGHLIGHT_ADDITION, (row, j1), (row, j2))
+                        self.textarea2.highlight(HIGHLIGHT_ADDITION, (row, j1), (row, j2))
                     case "delete":
-                        self.multext1.highlight(HIGHLIGHT_DELETION, (row, i1), (row, i2))
+                        self.textarea1.highlight(HIGHLIGHT_DELETION, (row, i1), (row, i2))
                     case "replace":
-                        self.multext1.highlight(HIGHLIGHT_MODIFIED, (row, i1), (row, i2))
-                        self.multext2.highlight(HIGHLIGHT_MODIFIED, (row, j1), (row, j2))
+                        self.textarea1.highlight(HIGHLIGHT_MODIFIED, (row, i1), (row, i2))
+                        self.textarea2.highlight(HIGHLIGHT_MODIFIED, (row, j1), (row, j2))
 
         if n1 < n2:  # insert
-            self.multext2.highlight(HIGHLIGHT_ADDITION, (n1 + 1, 0))
+            self.textarea2.highlight(HIGHLIGHT_ADDITION, (n1 + 1, 0))
         elif n1 > n2:  # delete
-            self.multext1.highlight(HIGHLIGHT_DELETION, (n2 + 1, 0))
+            self.textarea1.highlight(HIGHLIGHT_DELETION, (n2 + 1, 0))
 
 
 if __name__ == "__main__":
